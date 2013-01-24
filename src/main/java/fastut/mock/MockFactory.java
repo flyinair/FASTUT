@@ -251,6 +251,9 @@ public class MockFactory implements Opcodes {
             generator.returnValue();
             generator.visitLabel(l0);
             switch (returnType.getSort()) {
+                case Type.BOOLEAN:
+                    generator.push(true);
+                    break;
                 case Type.BYTE:
                     generator.push((Byte) ObjectPool.getObject(returnType));
                     break;
