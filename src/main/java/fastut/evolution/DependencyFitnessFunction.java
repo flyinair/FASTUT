@@ -60,7 +60,12 @@ public class DependencyFitnessFunction extends FitnessFunction {
                 String gName = geneNames.get(j);
                 if (paramSet.contains(j)) {
                     int index = Integer.parseInt(gName.substring("arg".length()));
-                    initargs[index] = a_subject.getGene(gIndex).getAllele();
+                    if (geneTypes.get(j).getSort() == Type.OBJECT) {
+                        Integer locate = (Integer) a_subject.getGene(gIndex).getAllele();
+                        initargs[index] = pool.getObject(geneTypes.get(j), locate);
+                    } else {
+                        initargs[index] = a_subject.getGene(gIndex).getAllele();
+                    }
                     gIndex++;
                     continue;
                 }
@@ -129,8 +134,8 @@ public class DependencyFitnessFunction extends FitnessFunction {
                         fastut.util.ObjectSelector.set(receiver, entryV.getKey(), entryV.getValue());
                     }
                 }
-
                 method.invoke(receiver, initargs);
+
             } catch (Throwable e) {
                 e.printStackTrace();
             }

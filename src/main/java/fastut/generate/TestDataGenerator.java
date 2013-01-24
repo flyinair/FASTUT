@@ -382,9 +382,21 @@ public class TestDataGenerator {
                 String gName = geneNames.get(j);
                 if (paramSet.contains(j)) {
                     int index = Integer.parseInt(gName.substring("arg".length()));
-                    initargs[index] = a_subject.getGene(gIndex).getAllele();
+                    String paramStr = "";
+                    if (geneTypes.get(j).getSort() == Type.OBJECT) {
+                        Integer locate = (Integer) a_subject.getGene(gIndex).getAllele();
+                        initargs[index] = pool.getObject(geneTypes.get(j), locate);
+                        if (initargs[index] != null) {
+                            paramStr += "\"" + initargs[index] + "\"";
+                        } else {
+                            paramStr += initargs[index];
+                        }
+                    } else {
+                        initargs[index] = a_subject.getGene(gIndex).getAllele();
+                        paramStr += initargs[index];
+                    }
                     gIndex++;
-                    path.userParamTestValues.get(pIndex).userParamValue = "" + initargs[pIndex];
+                    path.userParamTestValues.get(pIndex).userParamValue = paramStr;
                     pIndex++;
                     continue;
                 }
@@ -461,7 +473,11 @@ public class TestDataGenerator {
                     path.additionalConstraints += "ReflectUtil.setFieldValue(instance, \"" + gName + "\", " + valueStr
                                                   + ");\n";
                 } else if (paramSet.contains(j)) {
+
                     valueStr = "" + initargs[pIndex];
+                    if (geneTypes.get(j).getSort() == Type.OBJECT) {
+                        valueStr = "\"" + valueStr + "\"";
+                    }
                     path.userParamTestValues.get(pIndex).userParamValue = valueStr;
                     pIndex++;
                 } else {
