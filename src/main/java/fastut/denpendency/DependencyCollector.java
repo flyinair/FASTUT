@@ -72,7 +72,7 @@ public class DependencyCollector extends ClassAdapter implements Opcodes {
         if (superlist.size() == 0) {
             superlist.add(name);
         }
-        if (superName != null && !"java/lang/Object".equals(superName)) {
+        if (superName != null && !"java/lang/Object".equals(superName) && !"java/lang/Enum".equals(superName)) {
             collect(superName);
             superlist.add(superName);
         }

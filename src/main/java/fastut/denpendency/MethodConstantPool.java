@@ -248,4 +248,12 @@ public class MethodConstantPool {
         return className;
     }
 
+    @Override
+    public String toString() {
+        return "MethodConstantPool [name=" + name + ", desc=" + desc + ", className=" + className + ", CHAR_POOL="
+               + CHAR_POOL + ", INT_POOL=" + INT_POOL + ", DOUBLE_POOL=" + DOUBLE_POOL + ", FLOAT_POOL=" + FLOAT_POOL
+               + ", LONG_POOL=" + LONG_POOL + ", SHORT_POOL=" + SHORT_POOL + ", BYTE_POOL=" + BYTE_POOL
+               + ", STRING_POOL=" + STRING_POOL + "]";
+    }
+
 }

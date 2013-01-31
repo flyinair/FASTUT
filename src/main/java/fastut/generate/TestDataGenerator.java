@@ -36,6 +36,7 @@ import fastut.mock.Condition;
 import fastut.mock.Expect;
 import fastut.mock.MockFactory;
 import fastut.mock.MockPool;
+import fastut.util.FastUTRegxString;
 
 public class TestDataGenerator {
 
@@ -206,10 +207,12 @@ public class TestDataGenerator {
         return null;
     }
 
-    public static final String[] LINK_STR = { "_" };
-
     public static boolean hasDoubleChar(String string) {
         return !(string.getBytes().length == string.length());
+    }
+
+    public static boolean hasAnyRegex(String target) {
+        return target.contains(".*?");
     }
 
     public static void makeSharing(Map<String, fastut.denpendency.MethodConstantPool> values) {
@@ -218,17 +221,25 @@ public class TestDataGenerator {
         for (Map.Entry<String, fastut.denpendency.MethodConstantPool> entry : values.entrySet()) {
             STRING_POOL.addAll(entry.getValue().STRING_POOL);
         }
+        Set<String> regexlist = new HashSet<String>();
         for (String left : STRING_POOL) {
             if (hasDoubleChar(left)) {
                 continue;
             }
-            String right = (String) fastut.object.ObjectPool.getObject(String.class);
-            FINAL_STRING_POOL.add(left);
-            for (String link : LINK_STR) {
-                FINAL_STRING_POOL.add(left + link + right);
-                // FINAL_STRING_POOL.add(right + link + left);
+            if (hasAnyRegex(left)) {
+                regexlist.add(left);
+                continue;
             }
+            FINAL_STRING_POOL.add(left);
         }
+        FINAL_STRING_POOL.add("");
+        FastUTRegxString regxStr = new FastUTRegxString();
+        Set<String> externals = new HashSet<String>();
+        for (String regexStr : regexlist) {
+            externals.addAll(regxStr.replaceAndParse(regexStr, ".*?", FINAL_STRING_POOL));
+        }
+        FINAL_STRING_POOL.addAll(externals);
+
         for (Map.Entry<String, fastut.denpendency.MethodConstantPool> entry : values.entrySet()) {
             entry.getValue().STRING_POOL = new ArrayList<String>(FINAL_STRING_POOL);
         }
@@ -236,7 +247,7 @@ public class TestDataGenerator {
 
     public static void main(String[] args) throws Throwable {
 
-        String className = "samples.ServiceBean";
+        String className = "samples.RuleType";
         String orignalName = className;
         TestDataGenerator generator = new TestDataGenerator(className);
 
@@ -260,11 +271,11 @@ public class TestDataGenerator {
             String methodId = className + "." + methodName + methodDesc;
             fastut.denpendency.MethodConstantPool pool = values.get(methodId);
             pool.reduce();
+            //System.err.println(pool);
             System.out.println("methodID: " + methodId);
 
             // force to load class
             MockFactory.currentLoader().loadClass(pool.getClassName());
-
             int branchNum = projectData.getClassData(pool.getClassName()).getNumberOfValidBranches(pool.getName()
                                                                                                            + pool.getDesc());
             if (branchNum <= 0) {
@@ -520,7 +531,14 @@ public class TestDataGenerator {
                 }
 
                 Object ret = method.invoke(receiver, initargs);
-                String retStr = (ret instanceof String) && (ret != null) ? "\"" + ret + "\"" : "" + ret;
+                String retStr = "";
+                if ((ret instanceof String) && (ret != null)) {
+                    retStr = "\"" + ret + "\"";
+                } else if (ret != null && ret.getClass() != null && ret.getClass().isEnum()) {
+                    retStr = ret.getClass().getSimpleName() + "." + ret;
+                } else {
+                    retStr = "" + ret;
+                }
                 path.expectedOutput = "" + retStr;
             } catch (Throwable e) {
                 e.printStackTrace();
