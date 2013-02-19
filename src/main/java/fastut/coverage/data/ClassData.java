@@ -131,11 +131,12 @@ public class ClassData extends CoverageDataContainer implements Comparable<Class
                 }
             }
             if (total == 0) return 1.0;
-            return (double) covered / total;
+            return ((double) covered) / total;
         } finally {
             lock.unlock();
         }
     }
+
     public int getNumberOfValidBranches(String methodNameAndDescriptor) {
         int total = 0;
         lock.lock();
@@ -514,15 +515,25 @@ public class ClassData extends CoverageDataContainer implements Comparable<Class
 
     @Override
     public void reset() {
-        for (Map.Entry<Integer, LineData> entry : branches.entrySet()) {
-            entry.getValue().reset();
-        }
+        lock.lock();
+        try {
+            for (Map.Entry<Integer, LineData> entry : branches.entrySet()) {
+                entry.getValue().reset();
+            }
 
-        Iterator<CoverageData> iter = children.values().iterator();
-        while (iter.hasNext()) {
-            LineData next = (LineData) iter.next();
-            next.reset();
+            Iterator<CoverageData> iter = children.values().iterator();
+            while (iter.hasNext()) {
+                LineData next = (LineData) iter.next();
+                next.reset();
+            }
+        } finally {
+            lock.unlock();
         }
+    }
+
+    @Override
+    public String toString() {
+        return "ClassData [branches=" + branches + "]";
     }
 
 }

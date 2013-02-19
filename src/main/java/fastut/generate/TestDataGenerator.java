@@ -26,12 +26,16 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.MethodNode;
 
+import fastut.coverage.data.ProjectData;
+import fastut.coverage.data.TouchCollector;
+import fastut.coverage.instrument.ClassInstrumenter;
 import fastut.denpendency.DependencyCollector;
 import fastut.denpendency.DependencyKey;
 import fastut.denpendency.FastUTFieldNode;
 import fastut.denpendency.FieldCall;
 import fastut.denpendency.MethodCall;
 import fastut.denpendency.MethodConstantPool;
+import fastut.denpendency.MethodScanner;
 import fastut.evolution.DependencyFitnessFunction;
 import fastut.evolution.GeneValueIterator;
 import fastut.evolution.MethodInvokeContext;
@@ -50,15 +54,15 @@ import fastut.util.generics.visitor.Reifier;
 
 public class TestDataGenerator {
 
-    final DependencyCollector                      collector;
-    final fastut.denpendency.MethodScanner         scanner;
-    final List<Gene>                               genes                 = new ArrayList<Gene>();
-    final Map<Integer, Type>                       geneTypeMap           = new HashMap<Integer, Type>();
-    final Configuration                            geneConfiguration     = new FastUTDefaultConfiguration();
-    private Collection<?>                          ignoreRegexes         = new Vector<Object>();
-    private Collection<?>                          ignoreBranchesRegexes = new Vector<Object>();
-    public static fastut.coverage.data.ProjectData projectData           = new fastut.coverage.data.ProjectData();
-    private final byte[]                           codes;
+    final DependencyCollector collector;
+    final MethodScanner       scanner;
+    final List<Gene>          genes                 = new ArrayList<Gene>();
+    final Map<Integer, Type>  geneTypeMap           = new HashMap<Integer, Type>();
+    final Configuration       geneConfiguration     = new FastUTDefaultConfiguration();
+    private Collection<?>     ignoreRegexes         = new Vector<Object>();
+    private Collection<?>     ignoreBranchesRegexes = new Vector<Object>();
+    public static ProjectData projectData           = new ProjectData();
+    private final byte[]      codes;
 
     public byte[] getCode() {
         return codes;
@@ -76,17 +80,13 @@ public class TestDataGenerator {
         // point
         ClassReader ccr = new ClassReader(className);
         ClassWriter ccw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-        fastut.coverage.instrument.ClassInstrumenter ccv = new fastut.coverage.instrument.ClassInstrumenter(
-                                                                                                            projectData,
-                                                                                                            ccw,
-                                                                                                            ignoreRegexes,
-                                                                                                            ignoreBranchesRegexes);
+        ClassInstrumenter ccv = new ClassInstrumenter(projectData, ccw, ignoreRegexes, ignoreBranchesRegexes);
         ccr.accept(ccv, 0);
 
         codes = ccw.toByteArray();
     }
 
-    public Gene getGene(SignaturedType type, fastut.denpendency.MethodConstantPool pool) throws Throwable {
+    public Gene getGene(SignaturedType type, MethodConstantPool pool) throws Throwable {
         if (type instanceof ListSignaturedType) {
             ListSignaturedType lt = (ListSignaturedType) type;
             return getGene(lt.getArgType(), pool);
@@ -95,7 +95,7 @@ public class TestDataGenerator {
         }
     }
 
-    public Gene getGene(Type type, fastut.denpendency.MethodConstantPool pool) throws Throwable {
+    public Gene getGene(Type type, MethodConstantPool pool) throws Throwable {
         int size = pool.getSize(type);
         switch (type.getSort()) {
             case Type.OBJECT:
@@ -160,7 +160,6 @@ public class TestDataGenerator {
         return new ArrayList<FastUTFieldNode>(nodeSet);
     }
 
-
     public IChromosome getBest(int branchNum, List<Gene> template, MethodInvokeContext invokeContext) throws Throwable {
         Configuration.reset();
         DependencyFitnessFunction function = new DependencyFitnessFunction(invokeContext);
@@ -191,7 +190,7 @@ public class TestDataGenerator {
         return bestSolutionSoFar;
     }
 
-    public static UnitMethod toUnitMethod(MethodNode node) {
+    static UnitMethod toUnitMethod(MethodNode node) {
         if (Modifier.isPublic(node.access)) {
             UnitMethod m = new UnitMethod();
             m.name = node.name;
@@ -227,7 +226,7 @@ public class TestDataGenerator {
         return null;
     }
 
-    public static boolean hasDoubleChar(String string) {
+    public static boolean hasChinese(String string) {
         return !(string.getBytes().length == string.length());
     }
 
@@ -243,7 +242,7 @@ public class TestDataGenerator {
         }
         Set<String> regexlist = new HashSet<String>();
         for (String left : STRING_POOL) {
-            if (hasDoubleChar(left)) {
+            if (hasChinese(left)) {
                 continue;
             }
             if (hasAnyRegex(left)) {
@@ -253,7 +252,7 @@ public class TestDataGenerator {
             FINAL_STRING_POOL.add(left);
         }
         FastUTRegxString regxStr = new FastUTRegxString();
-        if (FINAL_STRING_POOL.size() == 0) {
+        if (FINAL_STRING_POOL.size() < 5) {
             regxStr.parseRegx("\\w{3,12}");
             for (int i = 0; i < 3; ++i) {
                 String randStr = regxStr.randString();
@@ -390,8 +389,8 @@ public class TestDataGenerator {
 
             IChromosome bestSolutionSoFar = generator.getBest(branchNum, genes, invokeContext);
 
-            makeCode(initUnitMethod(autoUnitMethod, branchNum, invokeContext.getClassName()), invokeContext, bestSolutionSoFar);
-
+            makeCode(initUnitMethod(autoUnitMethod, branchNum, invokeContext.getClassName()), invokeContext,
+                     bestSolutionSoFar);
         }
 
         int dot = orignalName.lastIndexOf('.');
@@ -440,9 +439,12 @@ public class TestDataGenerator {
                     && (type.getSort() != Type.OBJECT || type.getDescriptor().equals("Ljava/lang/String;") || st instanceof ListSignaturedType)) {
                     if (st instanceof ListSignaturedType || st instanceof MapSignaturedType) {
                         path.additionalConstraints += FormatOut.asDeclartion(st, gName, value);
-                        path.additionalConstraints += FormatOut.asOperation("ReflectUtil", "setFieldValue", "instance", FormatOut.asString(gName), gName);
+                        path.additionalConstraints += FormatOut.asOperation("ReflectUtil", "setFieldValue", "instance",
+                                                                            FormatOut.asString(gName), gName);
                     } else {
-                        path.additionalConstraints += FormatOut.asOperation("ReflectUtil", "setFieldValue", "instance", FormatOut.asString(gName), FormatOut.asString(value));
+                        path.additionalConstraints += FormatOut.asOperation("ReflectUtil", "setFieldValue", "instance",
+                                                                            FormatOut.asString(gName),
+                                                                            FormatOut.asString(value));
                     }
                 } else if (invokeContext.isParam(j)) {
                     path.userParamTestValues.get(pIndex).userParamValue = FormatOut.asString(initargs[pIndex]);
@@ -458,7 +460,9 @@ public class TestDataGenerator {
                             if (!mockName.equals(gName)) {
                                 continue;
                             }
-                            path.additionalConstraints += FormatOut.asNonStrictExpectations(gName, call.getName(), call.getDesc(), vl.get(mIndex));
+                            path.additionalConstraints += FormatOut.asNonStrictExpectations(gName, call.getName(),
+                                                                                            call.getDesc(),
+                                                                                            vl.get(mIndex));
                             mIndex++;
                         }
                     }
@@ -472,12 +476,7 @@ public class TestDataGenerator {
             } catch (Throwable e) {
                 e.printStackTrace();
             }
-
-            invokeContext.reset();
         }
     }
-
-
-
 
 }

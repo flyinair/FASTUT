@@ -20,9 +20,8 @@ public class DependencyFitnessFunction extends FitnessFunction {
     @Override
     protected double evaluate(IChromosome a_subject) {
         TouchCollector.reset();
-        if (TestDataGenerator.projectData != null) {
-            TestDataGenerator.projectData.reset();
-        }
+        TestDataGenerator.projectData.reset();
+
         int size = a_subject.size();
         int iSize = invokeContext.getGeneTypeSize();
         int gSize = size / iSize;
@@ -38,7 +37,6 @@ public class DependencyFitnessFunction extends FitnessFunction {
             }
             invokeContext.tryInvoke();
         }
-        invokeContext.reset();
 
         TouchCollector.applyTouchesOnProjectData(TestDataGenerator.projectData);
         ClassData classData = TestDataGenerator.projectData.getClassData(invokeContext.getClassName());

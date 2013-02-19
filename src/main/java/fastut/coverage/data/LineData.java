@@ -170,15 +170,32 @@ public class LineData implements Comparable<Object>, CoverageData, HasBeenInstru
         }
     }
 
+    public int getFastUTNumberOfValidBranches() {
+        int ret = 0;
+        lock.lock();
+        try {
+            if (jumps != null) for (int i = jumps.size() - 1; i >= 0; i--)
+                ret += 1;
+            if (switches != null) for (int i = switches.size() - 1; i >= 0; i--)
+                ret += 1;
+            return ret;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     public int getNumberOfCoveredBranches() {
         int ret = 0;
         lock.lock();
         try {
             if (jumps != null) for (int i = jumps.size() - 1; i >= 0; i--) {
-                ret += ((JumpData) jumps.get(i)).getNumberOfCoveredBranches();
+                int jc = ((JumpData) jumps.get(i)).getNumberOfCoveredBranches();
+                ret += jc;
             }
-            if (switches != null) for (int i = switches.size() - 1; i >= 0; i--)
-                ret += ((SwitchData) switches.get(i)).getNumberOfCoveredBranches();
+            if (switches != null) for (int i = switches.size() - 1; i >= 0; i--) {
+                int sc = ((SwitchData) switches.get(i)).getNumberOfCoveredBranches();
+                ret += sc;
+            }
             return ret;
         } finally {
             lock.unlock();
@@ -376,11 +393,24 @@ public class LineData implements Comparable<Object>, CoverageData, HasBeenInstru
 
     @Override
     public void reset() {
-        this.hits = 0;
-        if (jumps != null) for (int i = jumps.size() - 1; i >= 0; i--) {
-            ((JumpData) jumps.get(i)).reset();
+        lock.lock();
+        try {
+            this.hits = 0;
+            if (jumps != null) for (int i = jumps.size() - 1; i >= 0; i--) {
+                ((JumpData) jumps.get(i)).reset();
+            }
+            if (switches != null) for (int i = switches.size() - 1; i >= 0; i--)
+                ((SwitchData) switches.get(i)).reset();
+        } finally {
+            lock.unlock();
         }
-        if (switches != null) for (int i = switches.size() - 1; i >= 0; i--)
-            ((SwitchData) switches.get(i)).reset();
     }
+
+    @Override
+    public String toString() {
+        return "LineData [hits=" + hits + ", jumps=" + jumps + ", switches=" + switches + ", lineNumber=" + lineNumber
+               + ", methodDescriptor=" + methodDescriptor + ", methodName=" + methodName + "]";
+    }
+
+
 }

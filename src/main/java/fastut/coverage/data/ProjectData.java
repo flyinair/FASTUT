@@ -262,13 +262,18 @@ public class ProjectData extends CoverageDataContainer implements HasBeenInstrum
 
     @Override
     public void reset() {
-        Iterator iter = classes.keySet().iterator();
-        while (iter.hasNext()) {
-            Object key = iter.next();
-            ClassData data = (ClassData) classes.get(key);
-            if (data != null) {
-                data.reset();
+        lock.lock();
+        try {
+            Iterator iter = classes.keySet().iterator();
+            while (iter.hasNext()) {
+                Object key = iter.next();
+                ClassData data = (ClassData) classes.get(key);
+                if (data != null) {
+                    data.reset();
+                }
             }
+        } finally {
+            lock.unlock();
         }
     }
 

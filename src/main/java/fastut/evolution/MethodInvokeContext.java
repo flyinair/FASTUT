@@ -223,7 +223,9 @@ public class MethodInvokeContext {
                     ObjectSelector.set(receiver, entryV.getKey(), entryV.getValue());
                 }
             }
-            return method.invoke(receiver, initargs);
+            Object ret = method.invoke(receiver, initargs);
+            reset();
+            return ret;
         } catch (Throwable e) {
             e.printStackTrace();
             return null;

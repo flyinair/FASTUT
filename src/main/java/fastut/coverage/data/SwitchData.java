@@ -213,7 +213,18 @@ public class SwitchData implements BranchCoverageData, Comparable<Object>, Seria
 
     @Override
     public void reset() {
-        Arrays.fill(hits, 0);
-        this.defaultHits = 0;
+        lock.lock();
+        try {
+            Arrays.fill(hits, 0);
+            this.defaultHits = 0;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "SwitchData [switchNumber=" + switchNumber + ", defaultHits=" + defaultHits + ", hits="
+               + Arrays.toString(hits) + ", keys=" + Arrays.toString(keys) + "]";
     }
 }
