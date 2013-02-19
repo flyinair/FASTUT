@@ -2,13 +2,13 @@ package samples;
 
 public class ServiceBean extends SuperSample {
 
-    private int               intV;
+    private long              intV;
     private String            stringV;
     private ServiceBeanHelper helper;
     private Saver             saver;
-    protected int  protectedI;
+    protected int             protectedI;
 
-    public boolean shouldHelpNow(int type) {
+    public boolean shouldHelpNow(long type) {
         if (type > intV) {
             return false;
         }

@@ -1,0 +1,20 @@
+package fastut.util.generics.tree;
+
+import fastut.util.generics.visitor.TypeTreeVisitor;
+
+/** AST that represents the type char. */
+public class CharSignature implements BaseType {
+
+    private static CharSignature singleton = new CharSignature();
+
+    private CharSignature(){
+    }
+
+    public static CharSignature make() {
+        return singleton;
+    }
+
+    public void accept(TypeTreeVisitor<?> v) {
+        v.visitCharSignature(this);
+    }
+}

@@ -29,14 +29,24 @@ import org.objectweb.asm.tree.MethodNode;
 import fastut.denpendency.DependencyCollector;
 import fastut.denpendency.DependencyKey;
 import fastut.denpendency.FastUTFieldNode;
+import fastut.denpendency.FieldCall;
 import fastut.denpendency.MethodCall;
+import fastut.denpendency.MethodConstantPool;
 import fastut.evolution.DependencyFitnessFunction;
+import fastut.evolution.GeneValueIterator;
+import fastut.evolution.MethodInvokeContext;
+import fastut.generate.struct.ParamBinding;
+import fastut.generate.struct.TestPath;
 import fastut.generate.struct.UnitMethod;
-import fastut.mock.Condition;
-import fastut.mock.Expect;
+import fastut.generate.struct.UserParamTestValue;
 import fastut.mock.MockFactory;
-import fastut.mock.MockPool;
 import fastut.util.FastUTRegxString;
+import fastut.util.generics.parser.SignatureParser;
+import fastut.util.generics.tree.TypeSignature;
+import fastut.util.generics.type.ListSignaturedType;
+import fastut.util.generics.type.MapSignaturedType;
+import fastut.util.generics.type.SignaturedType;
+import fastut.util.generics.visitor.Reifier;
 
 public class TestDataGenerator {
 
@@ -76,6 +86,15 @@ public class TestDataGenerator {
         codes = ccw.toByteArray();
     }
 
+    public Gene getGene(SignaturedType type, fastut.denpendency.MethodConstantPool pool) throws Throwable {
+        if (type instanceof ListSignaturedType) {
+            ListSignaturedType lt = (ListSignaturedType) type;
+            return getGene(lt.getArgType(), pool);
+        } else {
+            return getGene(type.getType(), pool);
+        }
+    }
+
     public Gene getGene(Type type, fastut.denpendency.MethodConstantPool pool) throws Throwable {
         int size = pool.getSize(type);
         switch (type.getSort()) {
@@ -83,6 +102,10 @@ public class TestDataGenerator {
                 if (type.getDescriptor().equals("Ljava/lang/String;")) {
                     size += 10;
                     return new IntegerGene(geneConfiguration, 0, size);
+                } else if (type.getDescriptor().equals("Ljava/lang/Integer;")) {
+                    return getGene(Type.INT_TYPE, pool);
+                } else if (type.getDescriptor().equals("Ljava/lang/Long;")) {
+                    return getGene(Type.LONG_TYPE, pool);
                 }
                 break;
             case Type.BOOLEAN:
@@ -137,13 +160,10 @@ public class TestDataGenerator {
         return new ArrayList<FastUTFieldNode>(nodeSet);
     }
 
-    public IChromosome getBest(int branchNum, List<Gene> template, Map<Integer, Type> geneTypes,
-                               Map<Integer, String> geneNames, Map<String, String> mockInternalNames,
-                               List<MethodCall> methodCalls, Set<Integer> paramSet,
-                               fastut.denpendency.MethodConstantPool pool) throws Throwable {
+
+    public IChromosome getBest(int branchNum, List<Gene> template, MethodInvokeContext invokeContext) throws Throwable {
         Configuration.reset();
-        DependencyFitnessFunction function = new DependencyFitnessFunction(pool, geneTypes, geneNames,
-                                                                           mockInternalNames, methodCalls, paramSet);
+        DependencyFitnessFunction function = new DependencyFitnessFunction(invokeContext);
         geneConfiguration.setFitnessFunction(function);
         List<Gene> lgs = new ArrayList<Gene>();
         for (int i = 0; i < branchNum; ++i) {
@@ -159,7 +179,7 @@ public class TestDataGenerator {
         geneConfiguration.setPopulationSize(10);
         Genotype population = Genotype.randomInitialGenotype(geneConfiguration);
         IChromosome bestSolutionSoFar = null;
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 10; i++) {
             bestSolutionSoFar = population.getFittestChromosome();
             System.out.println("the " + (i + 1) + " generation best:" + bestSolutionSoFar);
             if (bestSolutionSoFar.getFitnessValue() >= 1.0) {
@@ -232,8 +252,17 @@ public class TestDataGenerator {
             }
             FINAL_STRING_POOL.add(left);
         }
-        FINAL_STRING_POOL.add("");
         FastUTRegxString regxStr = new FastUTRegxString();
+        if (FINAL_STRING_POOL.size() == 0) {
+            regxStr.parseRegx("\\w{3,12}");
+            for (int i = 0; i < 3; ++i) {
+                String randStr = regxStr.randString();
+                FINAL_STRING_POOL.add(randStr);
+                FINAL_STRING_POOL.add(randStr.substring(1));
+                FINAL_STRING_POOL.add(randStr.substring(0, randStr.length() - 1));
+            }
+        }
+        FINAL_STRING_POOL.add("");
         Set<String> externals = new HashSet<String>();
         for (String regexStr : regexlist) {
             externals.addAll(regxStr.replaceAndParse(regexStr, ".*?", FINAL_STRING_POOL));
@@ -247,11 +276,11 @@ public class TestDataGenerator {
 
     public static void main(String[] args) throws Throwable {
 
-        String className = "samples.RuleType";
+        String className = "samples.ComplexObject";
         String orignalName = className;
         TestDataGenerator generator = new TestDataGenerator(className);
 
-        Map<String, fastut.denpendency.MethodConstantPool> values = generator.scanner.getMethodConstants();
+        Map<String, MethodConstantPool> values = generator.scanner.getMethodConstants();
         makeSharing(values);
 
         List<UnitMethod> unitMethods = new ArrayList<UnitMethod>();
@@ -261,34 +290,45 @@ public class TestDataGenerator {
                 continue;
             }
 
-            UnitMethod autoJUnitMethod = toUnitMethod(mNode);
-            unitMethods.add(autoJUnitMethod);
+            UnitMethod autoUnitMethod = toUnitMethod(mNode);
+            unitMethods.add(autoUnitMethod);
 
             String methodName = mNode.name;
             String methodDesc = mNode.desc;
             className = entry.getKey().getClassName().replace('/', '.');
-            Map<String, Object> valueMap = new HashMap<String, Object>();
             String methodId = className + "." + methodName + methodDesc;
-            fastut.denpendency.MethodConstantPool pool = values.get(methodId);
+            MethodConstantPool pool = values.get(methodId);
             pool.reduce();
-            //System.err.println(pool);
+            System.err.println(pool);
             System.out.println("methodID: " + methodId);
+
+            DependencyKey key = new DependencyKey(className.replace('.', '/'), methodName, methodDesc);
+            List<MethodCall> methodCalls = generator.collector.METHOD_VISITED_METHODS.get(key);
+            Set<FieldCall> fieldCalls = generator.collector.METHOD_VISITED_FIELDS.get(key);
+            for (FieldCall call : fieldCalls) {
+                System.err.println(call);
+            }
+
+            MethodInvokeContext invokeContext = new MethodInvokeContext(pool, methodCalls);
 
             // force to load class
             MockFactory.currentLoader().loadClass(pool.getClassName());
             int branchNum = projectData.getClassData(pool.getClassName()).getNumberOfValidBranches(pool.getName()
                                                                                                            + pool.getDesc());
+            if (pool.getName().equals("main") && pool.getDesc().equals("([Ljava/lang/String;)V")) {
+                System.out.println("skip main!");
+                continue;
+            }
             if (branchNum <= 0) {
                 System.out.println("no branch, so skip! for " + methodId);
                 continue;
+            } else {
+                System.err.println(methodId + "'s branch num [" + branchNum + "].");
             }
 
             List<Gene> genes = new ArrayList<Gene>();
-            Map<Integer, Type> geneTypes = new HashMap<Integer, Type>();
-            Map<Integer, String> geneNames = new HashMap<Integer, String>();
-            Set<Integer> paramSet = new HashSet<Integer>();
             List<FastUTFieldNode> fields = generator.getAllFields(entry.getKey().getClassName());
-            Map<String, String> mockInternalNames = new HashMap<String, String>();
+            System.err.println(fields);
             for (FastUTFieldNode node : fields) {
                 if ((Modifier.isFinal(node.access) && node.signature == null)) {
                     continue;
@@ -297,39 +337,41 @@ public class TestDataGenerator {
                     if (ft.getSort() == Type.OBJECT && !ft.getClassName().equals("java.lang.String")) {
                         Class<?> retClass = MockFactory.mock(ft.getClassName());
                         if (retClass != null) {
-                            mockInternalNames.put(ft.getInternalName(), node.name);
+                            invokeContext.setMockName(ft.getInternalName(), node.name);
                             node.setMockable(true);
                             node.setMockedClass(retClass);
+                        } else {
+                            System.err.println("mock failed for " + node);
+                            node.setMockable(false);
+                            if (node.signature != null) {
+                                Reifier rf = Reifier.make();
+                                TypeSignature tree = SignatureParser.make().parseTypeSig(node.signature);
+                                tree.accept(rf);
+                                SignaturedType t = rf.getResult();
+                                if (t instanceof ListSignaturedType) {
+                                    genes.add(generator.getGene(t, pool));
+                                    invokeContext.setGeneInfo(genes.size() - 1, node.name, t);
+                                }
+                            }
                         }
                     } else {
                         node.setMockable(false);
-                        genes.add(generator.getGene(ft, pool));
-                        geneNames.put(genes.size() - 1, node.name);
-                        geneTypes.put(genes.size() - 1, ft);
-                        // TODO
-                        valueMap.put(node.name, fastut.object.ObjectPool.getObject(ft));
+                        SignaturedType t = SignaturedType.makeSimpleType(ft);
+                        genes.add(generator.getGene(t, pool));
+                        invokeContext.setGeneInfo(genes.size() - 1, node.name, t);
                     }
                 }
             }
 
-            DependencyKey key = new DependencyKey(className.replace('.', '/'), methodName, methodDesc);
-            List<MethodCall> methodCalls = generator.collector.METHOD_VISITED_METHODS.get(key);
             for (MethodCall call : methodCalls) {
-                if (mockInternalNames.containsKey(call.getOwner())
-                    && Type.getReturnType(call.getDesc()) != Type.VOID_TYPE) {
+                System.err.println(call);
+                if (invokeContext.shouldBeMock(call.getOwner()) && Type.getReturnType(call.getDesc()) != Type.VOID_TYPE) {
                     Type returnType = Type.getReturnType(call.getDesc());
-                    genes.add(generator.getGene(returnType, pool));
+                    genes.add(generator.getGene(SignaturedType.makeSimpleType(returnType), pool));
                     Class<?> mockClass = MockFactory.mock(call.getOwner().replace('/', '.'));
-                    geneTypes.put(genes.size() - 1, Type.getType(mockClass));
-                    Object mock = fastut.util.TypeResolverFactory.newInstance(mockClass);
-                    Condition condition = new Condition(call.getOwner().replace('/', '.') + "." + call.getName()
-                                                        + call.getDesc());
-                    Expect expect = new Expect(fastut.object.ObjectPool.getObject(returnType));
-                    MockPool.setExpect(condition, expect);
-                    String mockName = mockInternalNames.get(call.getOwner());
-                    geneNames.put(genes.size() - 1, mockName);
-                    // TODO
-                    valueMap.put(mockName, mock);
+                    String mockName = invokeContext.getMockName(call.getOwner());
+                    invokeContext.setGeneInfo(genes.size() - 1, mockName,
+                                              SignaturedType.makeSimpleType(Type.getType(mockClass)));
                 }
             }
 
@@ -337,20 +379,18 @@ public class TestDataGenerator {
             for (int i = 0; i < argumentTypes.length; ++i) {
                 if (argumentTypes[i].getSort() != Type.OBJECT
                     || argumentTypes[i].getDescriptor().equals("Ljava/lang/String;")) {
-                    genes.add(generator.getGene(argumentTypes[i], pool));
-                    geneTypes.put(genes.size() - 1, argumentTypes[i]);
-                    geneNames.put(genes.size() - 1, "arg" + i);
-                    paramSet.add(genes.size() - 1);
+                    genes.add(generator.getGene(SignaturedType.makeSimpleType(argumentTypes[i]), pool));
+                    invokeContext.setGeneInfo(genes.size() - 1, "arg" + i,
+                                              SignaturedType.makeSimpleType(argumentTypes[i]));
+                    invokeContext.markParamSign(genes.size() - 1);
                 } else {
                     // TODO
                 }
             }
 
-            IChromosome bestSolutionSoFar = generator.getBest(branchNum, genes, geneTypes, geneNames,
-                                                              mockInternalNames, methodCalls, paramSet, pool);
+            IChromosome bestSolutionSoFar = generator.getBest(branchNum, genes, invokeContext);
 
-            makeCode(autoJUnitMethod, pool, geneTypes, geneNames, mockInternalNames, methodCalls, paramSet,
-                     bestSolutionSoFar, branchNum);
+            makeCode(initUnitMethod(autoUnitMethod, branchNum, invokeContext.getClassName()), invokeContext, bestSolutionSoFar);
 
         }
 
@@ -360,154 +400,66 @@ public class TestDataGenerator {
         System.out.println(testCreator.getTest());
     }
 
-    public static void makeCode(UnitMethod target, fastut.denpendency.MethodConstantPool pool,
-                                Map<Integer, Type> geneTypes, Map<Integer, String> geneNames,
-                                Map<String, String> mockInternalNames, List<MethodCall> methodCalls,
-                                Set<Integer> paramSet, IChromosome a_subject, int branchNum) {
+    static UnitMethod initUnitMethod(UnitMethod target, int branchNum, String className) {
         for (int i = 0; i < branchNum; ++i) {
-            fastut.generate.struct.TestPath tp = new fastut.generate.struct.TestPath();
-            for (fastut.generate.struct.ParamBinding param : target.params) {
-                tp.userParamTestValues.add(new fastut.generate.struct.UserParamTestValue(param));
+            TestPath tp = new TestPath();
+            tp.imports.add(className);
+            for (ParamBinding param : target.params) {
+                tp.userParamTestValues.add(new UserParamTestValue(param));
             }
             target.testBranches.add(tp);
         }
+        return target;
+    }
 
-        List<fastut.generate.struct.TestPath> paths = target.testBranches;
+    public static void makeCode(UnitMethod target, MethodInvokeContext invokeContext, IChromosome a_subject) {
+        List<TestPath> paths = target.testBranches;
         int size = a_subject.size();
-        int iSize = geneTypes.size();
+        int iSize = invokeContext.getGeneTypeSize();
         int gSize = size / iSize;
-        int gIndex = 0;
+        GeneValueIterator geneIter = new GeneValueIterator(a_subject);
         for (int i = 0; i < gSize; ++i) {
-            fastut.generate.struct.TestPath path = paths.get(i);
-            String className = pool.getClassName().replace('$', '.');
-            path.constructor = className + ".class";
-            path.additionalConstraints = "";
-            path.imports.add(className);
-            Map<String, Object> valueMap = new HashMap<String, Object>();
+            TestPath path = paths.get(i);
             int pIndex = 0;
-            int mIndex = 0;
-            Type[] argumentTypes = Type.getArgumentTypes(pool.getDesc());
-            Object[] initargs = new Object[argumentTypes.length];
+            Object[] initargs = invokeContext.getInitArgs();
             for (int j = 0; j < iSize; ++j) {
 
-                String gName = geneNames.get(j);
-                if (paramSet.contains(j)) {
-                    int index = Integer.parseInt(gName.substring("arg".length()));
-                    String paramStr = "";
-                    if (geneTypes.get(j).getSort() == Type.OBJECT) {
-                        Integer locate = (Integer) a_subject.getGene(gIndex).getAllele();
-                        initargs[index] = pool.getObject(geneTypes.get(j), locate);
-                        if (initargs[index] != null) {
-                            paramStr += "\"" + initargs[index] + "\"";
-                        } else {
-                            paramStr += initargs[index];
-                        }
-                    } else {
-                        initargs[index] = a_subject.getGene(gIndex).getAllele();
-                        paramStr += initargs[index];
-                    }
-                    gIndex++;
-                    path.userParamTestValues.get(pIndex).userParamValue = paramStr;
+                SignaturedType st = invokeContext.getGeneType(j);
+                Type type = st.getType();
+
+                if (invokeContext.isParam(j)) {
+                    Object paramValue = invokeContext.processParam(j, geneIter);
+                    path.userParamTestValues.get(pIndex).userParamValue = FormatOut.asString(paramValue);
                     pIndex++;
                     continue;
                 }
 
-                Type type = geneTypes.get(j);
-                List<Object> vauleList = new ArrayList<Object>();
-                if (type.getSort() == Type.OBJECT && type.getDescriptor().equals("Ljava/lang/String;")) {
-                    Object value = a_subject.getGene(gIndex).getAllele();
-                    vauleList.add(value);
-                    Integer index = (Integer) a_subject.getGene(iSize * i + j).getAllele();
-                    String str = (String) pool.getObject(type, index);
-                    try {
-                        value = str;
-                    } catch (Throwable e) {
-
-                    }
-                    valueMap.put(gName, value);
-                    gIndex++;
-                } else if (type.getSort() == Type.SHORT) {
-                    Object value = a_subject.getGene(gIndex).getAllele();
-                    vauleList.add(value);
-                    Integer index = (Integer) a_subject.getGene(iSize * i + j).getAllele();
-                    value = Short.valueOf((short) (int) index);
-                    valueMap.put(gName, value);
-                    gIndex++;
-                } else if (type.getSort() == Type.OBJECT) {
-                    for (MethodCall call : methodCalls) {
-                        if (mockInternalNames.containsKey(call.getOwner())
-                            && Type.getReturnType(call.getDesc()) != Type.VOID_TYPE) {
-                            String mockName = mockInternalNames.get(call.getOwner());
-                            if (!mockName.equals(gName)) {
-                                continue;
-                            }
-                            Class<?> mockClass = MockFactory.mock(call.getOwner().replace('/', '.'));
-                            Object mock = fastut.util.TypeResolverFactory.newInstance(mockClass);
-                            Condition condition = new Condition(call.getOwner().replace('/', '.') + "."
-                                                                + call.getName() + call.getDesc());
-                            Object value = a_subject.getGene(gIndex).getAllele();
-                            vauleList.add(value);
-                            gIndex++;
-                            Expect expect = new Expect(value);
-                            MockPool.setExpect(condition, expect);
-                            valueMap.put(mockName, mock);
-                        }
-                    }
-                } else {
-                    Object value = a_subject.getGene(gIndex).getAllele();
-                    vauleList.add(value);
-                    valueMap.put(gName, value);
-                    gIndex++;
-                }
-
-                String valueStr = "";
-                Object value = valueMap.get(gName);
-                if (type.getSort() == Type.OBJECT && type.getDescriptor().equals("Ljava/lang/String;")) {
-                    if (value != null) {
-                        valueStr = "\"" + value + "\"";
+                String gName = invokeContext.getGeneName(j);
+                Object value = invokeContext.processField(j, geneIter);
+                if (!invokeContext.isParam(j)
+                    && (type.getSort() != Type.OBJECT || type.getDescriptor().equals("Ljava/lang/String;") || st instanceof ListSignaturedType)) {
+                    if (st instanceof ListSignaturedType || st instanceof MapSignaturedType) {
+                        path.additionalConstraints += FormatOut.asDeclartion(st, gName, value);
+                        path.additionalConstraints += FormatOut.asOperation("ReflectUtil", "setFieldValue", "instance", FormatOut.asString(gName), gName);
                     } else {
-                        valueStr = "null";
+                        path.additionalConstraints += FormatOut.asOperation("ReflectUtil", "setFieldValue", "instance", FormatOut.asString(gName), FormatOut.asString(value));
                     }
-                } else if (type.getSort() == Type.LONG) {
-                    valueStr = value + "L";
-                } else if (type.getSort() == Type.DOUBLE) {
-                    valueStr = value + "D";
-                } else if (type.getSort() == Type.SHORT) {
-                    valueStr = "((short)" + value + ")";
-                } else if (type.getSort() == Type.OBJECT) {
-                    // TODO
-                } else {
-                    valueStr += "((" + geneTypes.get(j).getClassName() + ")" + value + ")";
-                }
-                if (!paramSet.contains(j)
-                    && (type.getSort() != Type.OBJECT || type.getDescriptor().equals("Ljava/lang/String;"))) {
-                    path.additionalConstraints += "ReflectUtil.setFieldValue(instance, \"" + gName + "\", " + valueStr
-                                                  + ");\n";
-                } else if (paramSet.contains(j)) {
-
-                    valueStr = "" + initargs[pIndex];
-                    if (geneTypes.get(j).getSort() == Type.OBJECT) {
-                        valueStr = "\"" + valueStr + "\"";
-                    }
-                    path.userParamTestValues.get(pIndex).userParamValue = valueStr;
+                } else if (invokeContext.isParam(j)) {
+                    path.userParamTestValues.get(pIndex).userParamValue = FormatOut.asString(initargs[pIndex]);
                     pIndex++;
                 } else {
-
-                    for (MethodCall call : methodCalls) {
-                        if (mockInternalNames.containsKey(call.getOwner())
+                    @SuppressWarnings("unchecked")
+                    List<Object> vl = (List<Object>) value;
+                    int mIndex = 0;
+                    for (MethodCall call : invokeContext.getMethodCalls()) {
+                        if (invokeContext.shouldBeMock(call.getOwner())
                             && Type.getReturnType(call.getDesc()) != Type.VOID_TYPE) {
-                            String mockName = mockInternalNames.get(call.getOwner());
+                            String mockName = invokeContext.getMockName(call.getOwner());
                             if (!mockName.equals(gName)) {
                                 continue;
                             }
+                            path.additionalConstraints += FormatOut.asNonStrictExpectations(gName, call.getName(), call.getDesc(), vl.get(mIndex));
                             mIndex++;
-                            path.additionalConstraints += "new NonStrictExpectations() {\n";
-                            path.additionalConstraints += "    {\n";
-                            path.additionalConstraints += "\t" + gName + "." + call.getName()
-                                                          + getParamString(call.getDesc()) + ";\n";
-                            path.additionalConstraints += "\treturns(" + a_subject.getGene(gIndex).getAllele() + ");\n";
-                            path.additionalConstraints += "    }\n";
-                            path.additionalConstraints += "};\n";
                         }
                     }
                 }
@@ -515,76 +467,17 @@ public class TestDataGenerator {
             }
 
             try {
-
-                java.lang.reflect.Method method = fastut.util.Initializer.getMethod(Class.forName(pool.getClassName(),
-                                                                                                  true,
-                                                                                                  MockFactory.currentLoader()),
-                                                                                    pool.getName(), pool.getDesc());
-
-                Object receiver = null;
-                if (!Modifier.isStatic(method.getModifiers())) {
-                    Class<?> receiverClass = Class.forName(pool.getClassName(), true, MockFactory.currentLoader());
-                    receiver = fastut.util.TypeResolverFactory.newInstance(receiverClass);
-                    for (Map.Entry<String, Object> entryV : valueMap.entrySet()) {
-                        fastut.util.ObjectSelector.set(receiver, entryV.getKey(), entryV.getValue());
-                    }
-                }
-
-                Object ret = method.invoke(receiver, initargs);
-                String retStr = "";
-                if ((ret instanceof String) && (ret != null)) {
-                    retStr = "\"" + ret + "\"";
-                } else if (ret != null && ret.getClass() != null && ret.getClass().isEnum()) {
-                    retStr = ret.getClass().getSimpleName() + "." + ret;
-                } else {
-                    retStr = "" + ret;
-                }
-                path.expectedOutput = "" + retStr;
+                Object ret = invokeContext.tryInvoke();
+                path.expectedOutput = FormatOut.asString(ret);
             } catch (Throwable e) {
                 e.printStackTrace();
             }
+
+            invokeContext.reset();
         }
     }
 
-    public static String getTypeString(Type type) {
-        StringBuilder builder = new StringBuilder();
-        switch (type.getSort()) {
-            case Type.LONG:
-                builder.append("anyLong");
-                break;
-            case Type.SHORT:
-                builder.append("anyShort");
-                break;
-            case Type.BYTE:
-                builder.append("anyByte");
-                break;
-            case Type.BOOLEAN:
-                builder.append("anyBoolean");
-                break;
-            case Type.CHAR:
-                builder.append("anyChar");
-                break;
-            case Type.FLOAT:
-                builder.append("anyFloat");
-                break;
-            case Type.OBJECT:
-                builder.append('(').append(type.getClassName()).append(')').append("any");
-                break;
-        }
-        return builder.toString();
-    }
 
-    public static String getParamString(String desc) {
-        StringBuilder builder = new StringBuilder();
-        builder.append('(');
-        Type[] types = Type.getArgumentTypes(desc);
-        if (types.length >= 1) {
-            for (int i = 0; i < types.length - 1; ++i) {
-                builder.append(getTypeString(types[i])).append(", ");
-            }
-            builder.append(getTypeString(types[types.length - 1]));
-        }
-        builder.append(')');
-        return builder.toString();
-    }
+
+
 }

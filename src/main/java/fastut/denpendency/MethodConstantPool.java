@@ -2,25 +2,29 @@ package fastut.denpendency;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 import org.objectweb.asm.Type;
 
 public class MethodConstantPool {
 
-    private final String   name;
-    private final String   desc;
-    private final String   className;
+    private final String     name;
+    private final String     desc;
+    private final String     className;
 
-    public List<Character> CHAR_POOL   = new ArrayList<Character>();
-    public List<Integer>   INT_POOL    = new ArrayList<Integer>();
-    public List<Double>    DOUBLE_POOL = new ArrayList<Double>();
-    public List<Float>     FLOAT_POOL  = new ArrayList<Float>();
-    public List<Long>      LONG_POOL   = new ArrayList<Long>();
-    public List<Short>     SHORT_POOL  = new ArrayList<Short>();
-    public List<Byte>      BYTE_POOL   = new ArrayList<Byte>();
-    public List<String>    STRING_POOL = new ArrayList<String>();
+    public List<Character>   CHAR_POOL      = new ArrayList<Character>();
+    public List<Integer>     INT_POOL       = new ArrayList<Integer>();
+    public List<Double>      DOUBLE_POOL    = new ArrayList<Double>();
+    public List<Float>       FLOAT_POOL     = new ArrayList<Float>();
+    public List<Long>        LONG_POOL      = new ArrayList<Long>();
+    public List<Short>       SHORT_POOL     = new ArrayList<Short>();
+    public List<Byte>        BYTE_POOL      = new ArrayList<Byte>();
+    public List<String>      STRING_POOL    = new ArrayList<String>();
+
+    public Map<Type, Object> CONTAINER_REPO = new HashMap<Type, Object>();
 
     public MethodConstantPool(String className, String name, String desc){
         this.className = className;
@@ -217,25 +221,25 @@ public class MethodConstantPool {
         if (size == -1 || index < 0 || index >= size) {
             return null;
         }
-        if (type.getSort() == Type.BYTE) {
+        if (type.getSort() == Type.BYTE || type.getDescriptor().equals("Ljava/lang/Byte;")) {
             return BYTE_POOL.get(index);
         }
-        if (type.getSort() == Type.CHAR) {
+        if (type.getSort() == Type.CHAR || type.getDescriptor().equals("Ljava/lang/Character;")) {
             return CHAR_POOL.get(index);
         }
-        if (type.getSort() == Type.DOUBLE) {
+        if (type.getSort() == Type.DOUBLE || type.getDescriptor().equals("Ljava/lang/Double;")) {
             return DOUBLE_POOL.get(index);
         }
-        if (type.getSort() == Type.FLOAT) {
+        if (type.getSort() == Type.FLOAT || type.getDescriptor().equals("Ljava/lang/Float;")) {
             return FLOAT_POOL.get(index);
         }
-        if (type.getSort() == Type.LONG) {
+        if (type.getSort() == Type.LONG || type.getDescriptor().equals("Ljava/lang/Long;")) {
             return LONG_POOL.get(index);
         }
-        if (type.getSort() == Type.INT) {
+        if (type.getSort() == Type.INT || type.getDescriptor().equals("Ljava/lang/Integer;")) {
             return INT_POOL.get(index);
         }
-        if (type.getSort() == Type.SHORT) {
+        if (type.getSort() == Type.SHORT || type.getDescriptor().equals("Ljava/lang/Short;")) {
             return SHORT_POOL.get(index);
         }
         if (type.getSort() == Type.OBJECT && type.getDescriptor().equals("Ljava/lang/String;")) {

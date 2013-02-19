@@ -98,6 +98,9 @@ public class ObjectPool {
         if ((type.equals(Short.class)) || (type.equals(Short.TYPE))) {
             return SHORT_POOL.get(random.nextInt(SHORT_POOL.size()));
         }
+        if ((type.equals(Boolean.class)) || (type.equals(Boolean.TYPE))) {
+            return random.nextBoolean();
+        }
         if (type.equals(String.class)) {
             return STRING_POOL.get(random.nextInt(STRING_POOL.size()));
         }
@@ -105,29 +108,32 @@ public class ObjectPool {
     }
 
     public static Object getObject(Type type) {
-        if (type.getSort() == Type.BYTE) {
+        if (type.getSort() == Type.BYTE || type.getDescriptor().equals("Ljava/lang/Byte;")) {
             return BYTE_POOL.get(random.nextInt(BYTE_POOL.size()));
         }
-        if (type.getSort() == Type.CHAR) {
+        if (type.getSort() == Type.CHAR || type.getDescriptor().equals("Ljava/lang/Character;")) {
             return CHAR_POOL.get(random.nextInt(CHAR_POOL.size()));
         }
-        if (type.getSort() == Type.DOUBLE) {
+        if (type.getSort() == Type.DOUBLE || type.getDescriptor().equals("Ljava/lang/Double;")) {
             return DOUBLE_POOL.get(random.nextInt(DOUBLE_POOL.size()));
         }
-        if (type.getSort() == Type.FLOAT) {
+        if (type.getSort() == Type.FLOAT || type.getDescriptor().equals("Ljava/lang/Float;")) {
             return FLOAT_POOL.get(random.nextInt(FLOAT_POOL.size()));
         }
-        if (type.getSort() == Type.LONG) {
+        if (type.getSort() == Type.LONG || type.getDescriptor().equals("Ljava/lang/Long;")) {
             return LONG_POOL.get(random.nextInt(LONG_POOL.size()));
         }
-        if (type.getSort() == Type.INT) {
+        if (type.getSort() == Type.INT || type.getDescriptor().equals("Ljava/lang/Integer;")) {
             return INT_POOL.get(random.nextInt(INT_POOL.size()));
         }
-        if (type.getSort() == Type.SHORT) {
+        if (type.getSort() == Type.SHORT || type.getDescriptor().equals("Ljava/lang/Short;")) {
             return SHORT_POOL.get(random.nextInt(SHORT_POOL.size()));
         }
         if (type.getSort() == Type.OBJECT && type.getDescriptor().equals("Ljava/lang/String;")) {
             return STRING_POOL.get(random.nextInt(STRING_POOL.size()));
+        }
+        if (type.getSort() == Type.BOOLEAN || type.getDescriptor().equals("Ljava/lang/Boolean;")) {
+            return random.nextBoolean();
         }
         return null;
     }
@@ -153,6 +159,9 @@ public class ObjectPool {
         }
         if ("short".equals(type)) {
             return "((short)" + SHORT_POOL.get(random.nextInt(SHORT_POOL.size())) + ")";
+        }
+        if ("boolean".equals(type)) {
+            return "" + random.nextBoolean();
         }
         if ("string".equals(type) || "String".equals(type)) {
             return "\"" + STRING_POOL.get(random.nextInt(STRING_POOL.size())) + "\"";
