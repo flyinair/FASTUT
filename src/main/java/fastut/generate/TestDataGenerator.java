@@ -45,6 +45,9 @@ import fastut.generate.struct.UnitMethod;
 import fastut.generate.struct.UserParamTestValue;
 import fastut.mock.MockFactory;
 import fastut.util.FastUTRegxString;
+import fastut.util.FormatOut;
+import fastut.util.NameUtil;
+import fastut.util.TypeMatcher;
 import fastut.util.generics.parser.SignatureParser;
 import fastut.util.generics.tree.TypeSignature;
 import fastut.util.generics.type.ListSignaturedType;
@@ -253,8 +256,8 @@ public class TestDataGenerator {
         }
         FastUTRegxString regxStr = new FastUTRegxString();
         if (FINAL_STRING_POOL.size() < 5) {
-            regxStr.parseRegx("\\w{3,12}");
-            for (int i = 0; i < 3; ++i) {
+            regxStr.parseRegx("\\w{2,12}");
+            for (int i = 0; i < 4; ++i) {
                 String randStr = regxStr.randString();
                 FINAL_STRING_POOL.add(randStr);
                 FINAL_STRING_POOL.add(randStr.substring(1));
@@ -268,7 +271,7 @@ public class TestDataGenerator {
         }
         FINAL_STRING_POOL.addAll(externals);
 
-        for (Map.Entry<String, fastut.denpendency.MethodConstantPool> entry : values.entrySet()) {
+        for (Map.Entry<String, MethodConstantPool> entry : values.entrySet()) {
             entry.getValue().STRING_POOL = new ArrayList<String>(FINAL_STRING_POOL);
         }
     }
@@ -294,12 +297,22 @@ public class TestDataGenerator {
 
             String methodName = mNode.name;
             String methodDesc = mNode.desc;
+
+            if (methodName.equals("main") && methodDesc.equals("([Ljava/lang/String;)V")) {
+                System.out.println("skip main!");
+                continue;
+            }
+
             className = entry.getKey().getClassName().replace('/', '.');
             String methodId = className + "." + methodName + methodDesc;
             MethodConstantPool pool = values.get(methodId);
             pool.reduce();
             System.err.println(pool);
-            System.out.println("methodID: " + methodId);
+            Set<String> allTypes = MethodConstantPool.CLASS_TYPE_SET.get(className);
+            System.err.println("allTypes: " + allTypes);
+            Set<Type> matchedTypes = TypeMatcher.match(Type.getType(List.class), allTypes);
+            System.err.println("match: " + matchedTypes);
+            System.err.println("methodID: " + methodId);
 
             DependencyKey key = new DependencyKey(className.replace('.', '/'), methodName, methodDesc);
             List<MethodCall> methodCalls = generator.collector.METHOD_VISITED_METHODS.get(key);
@@ -314,10 +327,7 @@ public class TestDataGenerator {
             MockFactory.currentLoader().loadClass(pool.getClassName());
             int branchNum = projectData.getClassData(pool.getClassName()).getNumberOfValidBranches(pool.getName()
                                                                                                            + pool.getDesc());
-            if (pool.getName().equals("main") && pool.getDesc().equals("([Ljava/lang/String;)V")) {
-                System.out.println("skip main!");
-                continue;
-            }
+
             if (branchNum <= 0) {
                 System.out.println("no branch, so skip! for " + methodId);
                 continue;
@@ -350,6 +360,12 @@ public class TestDataGenerator {
                                 if (t instanceof ListSignaturedType) {
                                     genes.add(generator.getGene(t, pool));
                                     invokeContext.setGeneInfo(genes.size() - 1, node.name, t);
+                                } else if (t instanceof MapSignaturedType) {
+                                    MapSignaturedType mst = (MapSignaturedType)t;
+                                    genes.add(generator.getGene(mst.getKtype(), pool));
+                                    invokeContext.setGeneInfo(genes.size() - 1, NameUtil.getMapKeyName(node.name), mst);
+                                    genes.add(generator.getGene(mst.getVtype(), pool));
+                                    invokeContext.setGeneInfo(genes.size() - 1, NameUtil.getMapValueName(node.name), mst);
                                 }
                             }
                         }
@@ -436,11 +452,11 @@ public class TestDataGenerator {
                 String gName = invokeContext.getGeneName(j);
                 Object value = invokeContext.processField(j, geneIter);
                 if (!invokeContext.isParam(j)
-                    && (type.getSort() != Type.OBJECT || type.getDescriptor().equals("Ljava/lang/String;") || st instanceof ListSignaturedType)) {
+                    && (type.getSort() != Type.OBJECT || type.getDescriptor().equals("Ljava/lang/String;") || st instanceof ListSignaturedType || st instanceof MapSignaturedType)) {
                     if (st instanceof ListSignaturedType || st instanceof MapSignaturedType) {
                         path.additionalConstraints += FormatOut.asDeclartion(st, gName, value);
                         path.additionalConstraints += FormatOut.asOperation("ReflectUtil", "setFieldValue", "instance",
-                                                                            FormatOut.asString(gName), gName);
+                                                                            FormatOut.asString(gName), NameUtil.transform(gName));
                     } else {
                         path.additionalConstraints += FormatOut.asOperation("ReflectUtil", "setFieldValue", "instance",
                                                                             FormatOut.asString(gName),
@@ -468,6 +484,9 @@ public class TestDataGenerator {
                     }
                 }
 
+                if(invokeContext.isMapBegin(j)) {
+                    ++j;
+                }
             }
 
             try {

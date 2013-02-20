@@ -32,8 +32,10 @@ public class DependencyFitnessFunction extends FitnessFunction {
                     invokeContext.processParam(j, geneIter);
                     continue;
                 }
-
                 invokeContext.processField(j, geneIter);
+                if(invokeContext.isMapBegin(j)) {
+                    ++j;
+                }
             }
             invokeContext.tryInvoke();
         }

@@ -6,25 +6,26 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.objectweb.asm.Type;
 
 public class MethodConstantPool {
 
-    private final String     name;
-    private final String     desc;
-    private final String     className;
+    private final String                   name;
+    private final String                   desc;
+    private final String                   className;
 
-    public List<Character>   CHAR_POOL      = new ArrayList<Character>();
-    public List<Integer>     INT_POOL       = new ArrayList<Integer>();
-    public List<Double>      DOUBLE_POOL    = new ArrayList<Double>();
-    public List<Float>       FLOAT_POOL     = new ArrayList<Float>();
-    public List<Long>        LONG_POOL      = new ArrayList<Long>();
-    public List<Short>       SHORT_POOL     = new ArrayList<Short>();
-    public List<Byte>        BYTE_POOL      = new ArrayList<Byte>();
-    public List<String>      STRING_POOL    = new ArrayList<String>();
+    public List<Character>                 CHAR_POOL      = new ArrayList<Character>();
+    public List<Integer>                   INT_POOL       = new ArrayList<Integer>();
+    public List<Double>                    DOUBLE_POOL    = new ArrayList<Double>();
+    public List<Float>                     FLOAT_POOL     = new ArrayList<Float>();
+    public List<Long>                      LONG_POOL      = new ArrayList<Long>();
+    public List<Short>                     SHORT_POOL     = new ArrayList<Short>();
+    public List<Byte>                      BYTE_POOL      = new ArrayList<Byte>();
+    public List<String>                    STRING_POOL    = new ArrayList<String>();
 
-    public Map<Type, Object> CONTAINER_REPO = new HashMap<Type, Object>();
+    public static Map<String, Set<String>> CLASS_TYPE_SET = new HashMap<String, Set<String>>();
 
     public MethodConstantPool(String className, String name, String desc){
         this.className = className;
@@ -41,14 +42,6 @@ public class MethodConstantPool {
         SHORT_POOL = new ArrayList<Short>(new HashSet<Short>(SHORT_POOL));
         BYTE_POOL = new ArrayList<Byte>(new HashSet<Byte>(BYTE_POOL));
         STRING_POOL = new ArrayList<String>(new HashSet<String>(STRING_POOL));
-        // Collections.shuffle(CHAR_POOL);
-        // Collections.shuffle(INT_POOL);
-        // Collections.shuffle(DOUBLE_POOL);
-        // Collections.shuffle(FLOAT_POOL);
-        // Collections.shuffle(LONG_POOL);
-        // Collections.shuffle(SHORT_POOL);
-        // Collections.shuffle(STRING_POOL);
-        // Collections.shuffle(BYTE_POOL);
         Collections.sort(CHAR_POOL);
         Collections.sort(INT_POOL);
         Collections.sort(DOUBLE_POOL);

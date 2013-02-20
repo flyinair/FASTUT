@@ -1,5 +1,8 @@
 package fastut.denpendency;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.Attribute;
 import org.objectweb.asm.Label;
@@ -13,12 +16,20 @@ public class MethodResolver extends MethodAdapter {
     private String             methodName;
     private String             methodDesc;
     private MethodConstantPool pool;
+    private Set<String>        typeSet;
+    private String             internalClassName;
 
     public MethodResolver(MethodConstantPool pool, MethodVisitor mv){
         super(mv);
         this.pool = pool;
         this.methodName = pool.getName();
         this.methodDesc = pool.getDesc();
+        this.internalClassName = pool.getClassName().replace('.', '/');
+        typeSet = MethodConstantPool.CLASS_TYPE_SET.get(pool.getClassName());
+        if (typeSet == null) {
+            typeSet = new HashSet<String>();
+            MethodConstantPool.CLASS_TYPE_SET.put(pool.getClassName(), typeSet);
+        }
     }
 
     public String getMethodName() {
@@ -97,16 +108,25 @@ public class MethodResolver extends MethodAdapter {
 
     @Override
     public void visitTypeInsn(int opcode, String type) {
+        if (!internalClassName.equals(type)) {
+            typeSet.add(type);
+        }
         super.visitTypeInsn(opcode, type);
     }
 
     @Override
     public void visitFieldInsn(int opcode, String owner, String name, String desc) {
+        if (!internalClassName.equals(owner)) {
+            typeSet.add(owner);
+        }
         super.visitFieldInsn(opcode, owner, name, desc);
     }
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc) {
+        if (!internalClassName.equals(owner)) {
+            typeSet.add(owner);
+        }
         super.visitMethodInsn(opcode, owner, name, desc);
     }
 

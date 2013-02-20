@@ -17,7 +17,8 @@ import fastut.mock.Condition;
 import fastut.mock.Expect;
 import fastut.mock.MockFactory;
 import fastut.mock.MockPool;
-import fastut.util.Initializer;
+import fastut.util.ClassUtil;
+import fastut.util.NameUtil;
 import fastut.util.ObjectSelector;
 import fastut.util.TypeResolverFactory;
 import fastut.util.generics.type.ListSignaturedType;
@@ -41,7 +42,7 @@ public class MethodInvokeContext {
         initargs = new Object[Type.getArgumentTypes(pool.getDesc()).length];
     }
 
-    public void reset() {
+    void reset() {
         valueMap.clear();
         for (int i = 0; i < initargs.length; ++i) {
             initargs[i] = null;
@@ -76,9 +77,9 @@ public class MethodInvokeContext {
     public Object processField(int index, GeneValueIterator geneIter) {
         SignaturedType st = geneTypes.get(index);
         if (st instanceof ListSignaturedType) {
-            return processListField(st, index, geneIter);
+            return processListField((ListSignaturedType) st, index, geneIter);
         } else if (st instanceof MapSignaturedType) {
-            return processMapField(st, index, geneIter);
+            return processMapField((MapSignaturedType) st, index, geneIter);
         } else if (st.getType().getSort() == Type.OBJECT && !st.getType().getDescriptor().equals("Ljava/lang/String;")) {
             return processMockField(st, index, geneIter);
         } else {
@@ -97,10 +98,10 @@ public class MethodInvokeContext {
     }
 
     @SuppressWarnings("unchecked")
-    Object processListField(SignaturedType st, int index, GeneValueIterator geneIter) {
+    Object processListField(ListSignaturedType lst, int index, GeneValueIterator geneIter) {
         String gName = geneNames.get(index);
         List<Object> value = (List<Object>) valueMap.get(gName);
-        Type argType = ((ListSignaturedType) st).getArgType().getType();
+        Type argType = lst.getArgType().getType();
         Object obj = adjustValue(argType, geneIter);
         if (obj != null) {
             if (value == null) {
@@ -113,8 +114,25 @@ public class MethodInvokeContext {
         return value;
     }
 
-    Object processMapField(SignaturedType st, int index, GeneValueIterator geneIter) {
-        return null;
+    @SuppressWarnings("unchecked")
+    Object processMapField(MapSignaturedType mst, int index, GeneValueIterator geneIter) {
+        String gName = geneNames.get(index);
+        String mapName = NameUtil.transform(gName);
+        Map<Object, Object> value = (Map<Object, Object>) valueMap.get(mapName);
+        Type kType = mst.getKtype().getType();
+        Type vType = mst.getVtype().getType();
+        Object k = adjustValue(kType, geneIter);
+        Object v = adjustValue(vType, geneIter);
+        if (k != null) {
+            if (value == null) {
+                value = new HashMap<Object, Object>();
+            }
+            value.put(k, v);
+            valueMap.put(mapName, value);
+        } else {
+            valueMap.put(mapName, null);
+        }
+        return value;
     }
 
     List<Object> processMockField(SignaturedType st, int index, GeneValueIterator geneIter) {
@@ -195,6 +213,14 @@ public class MethodInvokeContext {
         return paramSet.contains(index);
     }
 
+    public boolean isMapBegin(int index) {
+        String gName = geneNames.get(index);
+        if(gName.endsWith("$fastut$map$key")) {
+            return true;
+        }
+        return false;
+    }
+
     public boolean shouldBeMock(String owner) {
         return mockInternalNames.containsKey(owner);
     }
@@ -214,7 +240,7 @@ public class MethodInvokeContext {
     public Object tryInvoke() {
         try {
             Class<?> receiverClass = Class.forName(pool.getClassName(), true, MockFactory.currentLoader());
-            Method method = Initializer.getMethod(receiverClass, pool.getName(), pool.getDesc());
+            Method method = ClassUtil.getMethod(receiverClass, pool.getName(), pool.getDesc());
 
             Object receiver = null;
             if (!Modifier.isStatic(method.getModifiers())) {
